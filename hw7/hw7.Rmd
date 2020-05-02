@@ -1,0 +1,97 @@
+---
+title: "Hw 7 Problem1"
+author: "Kwon Yonghyun"
+date: "3/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(emmeans)
+```
+
+# Data loading
+
+```{r}
+data(pigs)
+pigs2 <- pigs
+pigs2$percent <- as.factor(pigs2$percent)
+pigs2$conc <- log(pigs2$conc)
+pigs$conc <- log(pigs$conc)
+```
+
+# (a)
+
+To get Type I SS, we can use *lm* function and *anova* function in *R*.
+
+```{r}
+model1 <- lm(conc ~ source * percent, data = pigs2)
+(anova1 <- anova(model1))
+```
+
+# (b)
+
+To obtain Type II SS, we can fit another model and use that Sum of Squares to obtain Sum of Squares for $source | percent, 1$.
+
+```{r}
+model2 <- lm(conc ~ percent * source, data = pigs2)
+anova2 <- anova(model2)
+
+anova3 <- anova1
+anova3[1,] <- anova2[2,]
+anova3
+```
+
+# (c)
+
+To obtain Type III SS, we can use *joint_tests* and *emmeans* functions.
+
+```{r}
+anova4 <- joint_tests(emmeans(model1, specs = c("source", "percent")))
+MSE = anova1["Residuals", "Mean Sq"]
+MSR = anova4$F.ratio * MSE
+SumSq = anova4$df1 * MSR
+anova4 <- cbind(Df = anova4$df1, SumSq = SumSq, MeanSq = MSR, Fvalue = anova4$F.ratio, pval = anova4$p.value)
+anova4 <- rbind(anova4, unlist(anova3[4,]))
+anova4
+```
+
+Note that *joint_test* function does not give Sum of Squares. Hence, we have to manually compute Sum of Squares and Mean Sum of Squares in R code.
+
+# (d)
+
+Ls means can be computed using *tapply* function.
+
+```{r}
+tapply(pigs2$conc, pigs2$source, mean)
+tapply(pigs2$conc, pigs2$percent, mean)
+```
+
+# (e)
+
+```{r}
+model3 <- lm(conc ~ source * percent, data = pigs)
+anova(model1, model3)
+```
+
+p-value greater than 0.05 implies that there is no strong evidence to reject the null hypothesis. Therefore, we can say that such linear model fit adequately relatvie to the cell-means model.
+
+# (f)
+
+Estimated linear relationship for each source can be represented as
+
+\begin{align*}
+fish &: \mu_R + x \beta_R \\
+soy &: \mu_R + \alpha_{Rs} + x( \beta_R + \gamma_{Rs}) \\
+skim &: \mu_R + \alpha_{Rk} + x( \beta_R + \gamma_{Rk})
+\end{align*}
+
+Hence, the estimated relationship is
+```{r}
+coef <- model3$coefficients
+sprintf("fish: y = %2.2f + x * %2.2f", coef[1], coef[4])
+sprintf("soy: y = %2.2f + x * %2.2f", coef[1] + coef[2], coef[4] + coef[5])
+sprintf("skim: y = %2.2f + x * %2.2f", coef[1] + coef[3], coef[4] + coef[6])
+```
+
+

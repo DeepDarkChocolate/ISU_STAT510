@@ -1,0 +1,191 @@
+---
+title: "hw12"
+author: "Yonghyun Kwon"
+date: "4/28/2020"
+output: pdf_document
+header-includes:
+   - \usepackage{bbm}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(lme4)
+library(dplyr)
+```
+
+# Problem 1
+
+```{r}
+d = read.delim("http://dnett.github.io/S510/LeafArea.txt")
+o = lmer(LeafArea ~ Dose + (1 + Dose | ResearchStation), data = d, REML = TRUE,
+         control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000)))
+```
+
+## (a)
+REML estimate of $\sigma_e^2$ is
+```{r}
+sigma(o)^2
+```
+
+## (b)
+REML estimate of $\Sigma_b$ is
+```{r}
+VarCorrdat <- as.data.frame(VarCorr(o))$vcov
+Sigma <- matrix(c(VarCorrdat[1], VarCorrdat[3], 
+                  VarCorrdat[3], VarCorrdat[2]), nr = 2)
+round(Sigma, 6)
+```
+
+## (c) and (f)
+```{r}
+d2 <- filter(d, d$ResearchStation == 7)
+plot(d2$Dose, d2$LeafArea)
+beta <- fixef(o)
+b <- ranef(o)$ResearchStation
+abline(beta)
+beta0 <- unlist(beta + b[7,])
+o2 = lm(LeafArea ~ Dose, data = d2)
+beta2 <- coef(o2)
+abline(beta0, col = "red")
+abline(beta2, col = "blue")
+```
+
+## (d)
+```{r}
+sprintf("%gx +%g", beta0[1], beta0[2])
+```
+
+## (e)
+```{r}
+sprintf("%gx +%g", beta2[1], beta2[2])
+```
+
+## (g)
+To compute the likelihiood ratio statistic for testing $H_o:\beta_2 = 0$, use *anova* function in R
+```{r}
+o3 <- lmer(LeafArea ~ 1 + (1 + Dose | ResearchStation), data = d, REML = FALSE,
+           control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000)))
+anova(o, o3)
+```
+Note that *R* automatically refit the models with ML because REML-based log-likelihood is no longer meaningful when testing different mean models. According to the table above, the likelihood ratio statistics is 40.086.
+
+## (h)
+```{r}
+AIC(o)
+```
+
+## (i)
+```{r}
+AIC(lmer(LeafArea ~ Dose + (1 | ResearchStation), data = d, REML = TRUE,
+         control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000))))
+```
+
+## (j)
+```{r}
+AIC(logLik(lm(LeafArea ~ Dose, data = d), REML = TRUE))
+```
+
+##(k)
+Since AIC for the second model is the smallest, model considered in part (i) is preferred.
+
+# Problem 2
+$X, \beta, Z, u, G, R$ are
+\begin{align*}
+X = \mathbbm{1}_{15} \otimes
+\begin{pmatrix}
+\mathbbm{1}_{5} & x 
+\end{pmatrix}
+\otimes \mathbbm{1}_{4}, \ &\beta = (\beta_1 \beta_2)^T \\
+Z = I_{15} \otimes \begin{pmatrix}
+\mathbbm{1}_{5} & x 
+\end{pmatrix} \otimes \mathbbm{1}_{4}, \ &u = (b_{11}, b_{21}, b_{12}, b_{22}, \cdots, b_{115}, b_{215})^T \\
+&G = I_{15} \otimes \Sigma_b \\
+&R = \sigma_e^2I_{300}
+\end{align*}
+where $x= (x_1, x_2, x_3, x_4, x_5)^T$
+
+## Problem 3
+```{r}
+Donner = read.delim("https://dnett.github.io/S510/Donner.txt")
+Donner$status<-ifelse(Donner$status=="SURVIVED", 1, 0)
+```
+
+To explain how age and sex are associated with the probability of survival, we construct the following model
+
+$$
+survival_i \sim Bernoulli(\pi_i) \\
+\mathrm{logit}(\pi_i) = x_i^T \beta_i
+$$
+where $x_i = (1, age_i, I(sex_i = Male))^T$. In R, the model is parametrized and expressed as
+
+```{r}
+model <- glm(status ~ age + sex, family = binomial(link = "logit"), data = Donner)
+summary(model)
+```
+
+To check that the model is reliable, observe that the deviance and degree of freedom for residual is
+```{r}
+deviance(model)
+df.residual(model)
+deviance(model)/df.residual(model)
+```
+Since deviance is not significantly larger than the residual, there is no overdispersion. This also implies that there is no significant lack of fit because
+```{r}
+1-pchisq(deviance(model), df.residual(model))
+```
+The p-value for lack of fit test is greater than 0.05.
+
+Now, from this model, consider an appropriate test
+```{r}
+summary(model)
+```
+For example, the following test can be used to test whether sex main effect is significant.
+$$
+H_0: sex_{MALE} = 0, \ H_1: \mathrm{not} \ H_0
+$$
+Since p-value for *sexMALE* in the above summary table is 0.0345, which is smaller than 0.05, sex main effect is significant with significance level 0.05.
+
+Similarly, to test whether age variable is significant, we can see the p-value corresponding to age(0.0359). Age variable is also significant since 
+That is, the null hypothesis that the coefficient corresponding to age is 0 is reject with significance level 0.05.
+
+We can also construct confidence interval of the probability of survival for each person with specific age of sex. Based on the lecture note, the following function computes the estimated probabilities and its confidence intervals
+```{r}
+conf2 <- function(x){
+  b <- coef(model)
+  p = 1/(1+exp(-t(x) %*% b))
+  sexb = sqrt(t(x)%*% vcov(model) %*% x)
+  cixb <- c(t(x) %*% b - 2 *sexb, t(x) %*% b + 2 *sexb)
+  bound <- 1 / (1 + exp(-cixb))
+  return(c(bound[1], p, bound[2]))
+}
+```
+
+From this function, the the estimated probabilities and its confidence intervals are plotted
+```{r}
+age <- 15:65
+res <- sapply(age, function(x) conf2(c(1, x, 0)))
+boxplot(res, col = "blue")
+
+res2 <- sapply(age, function(x) conf2(c(1, x, 1)))
+boxplot(res2, add = T, col = "Red")
+
+legend("topright", c("Male", "Female"), fill = c("red", "blue"))
+```
+
+In this plot, each size of box is not meaningful but upper limit of box plot refers to the 95% upper bound for the confidence interval and lower limit of box plot refers to the the 95% lower bound for the confidence interval.
+
+From the preceding analysis, we can say that males were more susceptible to death than females and the younger people were more able to survive than the older people.
+
+# Problem 4
+Let $y_A, y_B, y_C$ be the response for each experimental unit with treatment $A, B, C$ respectively. The variance of each response is $Var(y_A) = 5, Var(y_B) = 5, Var(y_C) = 0.95$. However we can expect that the estimated variance $\hat{\sigma}^2$ would be underestimated because of large number of experimental units for treatment $C$. This may result in a larger value of t-statistics(or Z statistics) than what it should be, so it may reject the null hypothesis even when there is no significant difference between $A$ and $B$.
+
+To be specific, we can evaluate the expected value of mse under the suggested Gauss Markov linear model:$y \sim trt$. The expected value of mse is the weighted mean
+$$
+\frac{9*5 + 9*5 + 49*0.95}{9+9+49} = 2.03806
+$$
+
+However, when computing t-statistics for $trt_A - trt_B$, the expected value of the mse of the denominator is $Var(y_A) = Var(y_B) = 5$.
+
+Hence, the mse is underestimated under the suggested model, so the null hypothesis might be reject even when the null hypothesis is true.
+
+In short, the model has possible significant lack of fit so it might not be safe to go further on this model.

@@ -1,0 +1,171 @@
+---
+title: "hw10"
+author: "Yonghyun Kwon"
+date: "4/15/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(lme4)
+library("lmerTest")
+library(NLRoot)
+```
+
+# Problem 2
+
+## (a)
+```{r}
+dat <- read.csv("https://dnett.github.io/S510/hw10GenotypeYield.txt", sep = "\t")
+dat$genotype <- factor(dat$genotype)
+
+#(a)
+(model1 <- lm(yield ~ 0 + genotype, data = dat))
+BLUE <- model1$coefficients
+```
+
+## (b)
+```{r}
+(model2 <- lmer(yield ~ 0 + 1|genotype, data = dat))
+#sigma_g^2 = 2.687^2 = 7.22
+#sigma_e^2 = 9.669^2 = 93.49
+```
+$\sigma_g^2$ = 2.687^2 = 7.22 while $\sigma_e^2$ = 9.669^2 = 93.49
+
+
+## (c)
+```{r}
+BLUP <- unlist(ranef(model2)) + fixef(model2)
+names(BLUP) <- names(BLUE)
+BLUP
+```
+
+## (d)
+```{r}
+plot(BLUE ~ BLUP)
+abline(0, 1)
+```
+
+We can see that the scatters has higher slope than 1. This is because BLUEs have higher variability than BLUPs.
+
+## (e)
+```{r}
+sort(BLUE, decreasing = TRUE)[1:5]
+```
+
+## (f)
+```{r}
+sort(BLUP, decreasing = TRUE)[1:5]
+```
+
+# Problem 3
+```{r}
+y = c(14, 9, 10, 5, 18, 9, 9, 17, 10, 17,18,13, 17, 16)
+G = rep(c(1,2),each = 7)
+G = as.factor(G)
+
+model1 = glm(y ~ 0 + G, family = "poisson")
+s1 = summary(model1)
+
+model2 = glm(y ~ 1, family = "poisson")
+s2 = summary(model2)
+```
+
+##(a)
+```{r}
+AIC(model1)
+```
+
+##(b)
+```{r}
+BIC(model1)
+```
+
+##(c)
+```{r}
+AIC(model2)
+```
+
+##(d)
+```{r}
+BIC(model2)
+```
+
+##(e)
+According to AIC, the first model is preferred.
+
+##(f)
+According to BIC, the first model is preferred.
+
+##(g)
+```{r}
+- 2 * logLik(model2) + 2 * logLik(model1)
+```
+
+##(h)
+```{r}
+aov <- anova(model1, model2, test = "LRT")
+aov$`Pr(>Chi)`[2]
+```
+
+##(i)
+```{r}
+V <- s1$cov.unscaled
+thetahat <- s1$coefficients[,1]
+(thetahat[2] - thetahat[1]) / sqrt(V[1,1] + V[2,2])
+```
+
+##(j)
+```{r}
+aov <- anova(model1, model2, test = "Rao")
+aov$`Pr(>Chi)`[2]
+```
+
+##(g)
+While the BLUPs are the weighted average of all the sample means and so BLUPs have smaller variablities in this case, the BLUE's are simply the average of i-th genotype.
+
+# Problem 5
+## (a)
+```{r}
+phat = 0.17
+n = 100
+margin = 1.96 * sqrt(phat * (1-phat) / n)
+phat - margin; phat + margin 
+```
+
+## (b)
+Find the solution of non-linear equation using bisection method in "NLRoot" package.
+```{r}
+ftn1 <- function(x){
+  17 * log(x) + 83 * log(1 - x)
+}
+
+lphat = ftn1(phat)
+lik2 = lphat - 1/2*qchisq(1- 0.05, 1)
+
+ftn2 <- function(x){
+  17 * log(x) + 83 * log(1 - x) - lik2
+}
+
+BFfzero(ftn2, 0, phat)
+#BFfzero(ftn2, phat, 1) #0.2515018
+```
+
+We can see that the confidence interval is (0.1051833, 0.251507)
+
+# Problem 6
+We can construct a confidence interval using the following asymptotic distribution
+$$
+\frac{\hat{p}_1- \hat{p}_2 - (p_1 - p_2)}{\sqrt{Var(\hat{p}_1 - \hat{p}_1)}} \rightarrow N(0,1)
+$$
+
+```{r}
+p1 = 172 / 350
+p2 = 137 / 350
+n = 350
+margin = 1.96 * sqrt(p1*(1-p1) / n + p2*(1-p2) / n)
+p1 - p2 - margin
+p1 - p2 + margin
+```
+
+So the 95 % confidence interval for $p_1 - p_2$ is(0.02680293, 0.1731971)

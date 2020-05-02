@@ -1,0 +1,125 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(Sleuth3)
+library(MASS)
+```
+
+# Homework 3 problem 2
+
+## a
+
+```{r}
+data1 <- case0501
+boxplot(Lifetime ~ Diet, data = data1, xlab = "Treatment Group")
+```
+
+According to the box-plot, NP group and N/N85 group seem to have different Lifetime than the other groups.
+
+## b
+
+```{r}
+lm1 <- lm(Lifetime ~ 0 + Diet, data = data1)
+anova1 <- anova(lm1)
+(SSE1 <- anova1$"Sum Sq"[2])
+```
+
+The full model with one unrestricted mean for each of the six treatment groups can be modeled as the above. *anova* function returns the sum of squared errors as a list in "Sum Sq" index. SSE is 15297.42
+
+## c
+
+```{r}
+(sigma <- anova1$"Mean Sq"[2])
+```
+
+Estimated variance can be found in the list of anova(lm1). The computed sigma squared is 44.59888
+
+## d
+
+To find the SSE for a reduced model, we need to set a reduced model in R. To do so, combine the group N/N85, N/NR50, N/R50lopro, and N/R40 and denote this group as "A". Then define a new factor "GrDiet", which has three levels of "A", "NP", and "R/R50".
+
+```{r}
+GrDiet <- data1$Diet
+levels(GrDiet)
+levels(GrDiet) <- c("A", "A", "A", "NP", "R/R50", "A")
+data1 <- cbind.data.frame(data1, GrDiet)
+```
+
+The SSE can be obtained in the same way as problem 2 - b.
+
+```{r}
+lm2 <- lm(Lifetime ~ 0 + GrDiet, data = data1)
+anova2 <- anova(lm2)
+(SSE2 <- anova2$"Sum Sq"[2])
+```
+
+The SSE is 20287.99
+
+## e
+
+Using the answers from parts (b) through (d), F-statistics can be computed. Sum of Squares due to Regression(SSR) is the difference between SSE in reduced model and that in full model. Also, the degree of freedom for SSR is the (degree of freedom of SSE2 = 346) - (degree of freedom of SSE2 = 343) = 3, and the degree of residual sum of square is 343.
+
+```{r}
+SSR = SSE2 - SSE1
+(Fstat <- SSR / 3 / (SSE1 / 343))
+```
+
+The F-statistics is 37.29968
+
+```{r}
+pf(Fstat, 3, 343, lower.tail = FALSE)
+```
+
+The p-value is less than .05, which implies that there is strong evidence of the alternative hypothesis.
+
+The generated F-statistics actually agree with the F-statistics obtained using *anova* function.
+
+```{r}
+anova(lm2, lm1)
+```
+
+
+## f
+
+According to the F-statistics, there is strong evidence to reject the null hypothesis. The F-statistics is 37.3 and the p-value is signifcantly less than 0.05. To conclude, it is not likely that the treatment effects of N/N85, N/R50, N/R50lopro, and N/R40 are equal. That is, there is a significant difference between the treatment effects of N/N85, N/R50, N/R50lopro, and N/R40.
+
+
+## g
+
+Write the mean of each level of ("N/N85", "N/R40", "N/R50", "NP", "R/R50", "lopro") as $(\mu_1, \mu_2, \mu_3, \mu_4, \mu_5, \mu_6)$. Then the null hypothesis can be written as $\mu_1 = \mu_2 = \mu_3 = \mu_6$. So one of appropriate C and d matrix can be (in this case, we can choose C so that C is an orthogonal matrix for computational benefit)
+
+$$
+C =
+\begin{pmatrix}
+1 & 0 & -1 & 0 & 0 & 0 \\
+0 & 1 & 0 & 0 & 0 & -1 \\
+1 & -1 & 1 & 0 & 0 & -1
+\end{pmatrix}, 
+d = \begin{pmatrix}
+0 \\
+0 \\
+0
+\end{pmatrix}
+$$
+
+
+```{r}
+C <- matrix(c(1,0,-1,0,0,0,0,1,0,0,0,-1,1,-1,1,0,0,-1), byrow = TRUE, nrow = 3)
+d <- 0
+beta <- lm1$coefficients
+```
+
+Now according to the formula given in slide 20 of slide set 2,
+
+```{r}
+Cbeta <- C%*%beta - d
+X <- model.matrix(~ 0 + Diet, data = data1)
+dnum <- drop(t(Cbeta) %*% solve(C%*%ginv(t(X) %*% X)%*%t(C), Cbeta))
+dnum / 3 / sigma
+```
+
+We can see that the F statistic, 37.29968 is equal to that computed in problem 2 - e, which is due to the equivalence of two tests.
+
+
